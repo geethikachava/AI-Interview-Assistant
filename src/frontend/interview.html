@@ -1,0 +1,416 @@
+{% extends "base.html" %}
+{% block title %}Live Interview — AI Assistant Interviews{% endblock %}
+{% block content %}
+<div class="interview-page">
+
+  <!-- STEP 0: Face Verification -->
+  <div id="step-verify" class="step-screen">
+    <div class="perm-card">
+      <div class="perm-icon">🔍</div>
+      <h2>Identity Verification</h2>
+      <p>Look directly at the camera. We will verify your identity matches your profile photo.</p>
+      <video id="verify-cam" autoplay muted playsinline
+        style="width:180px;height:180px;border-radius:50%;object-fit:cover;border:3px solid #c7d2fe;margin:0 auto 1rem;display:block;background:#000"></video>
+      <canvas id="verify-canvas" style="display:none"></canvas>
+      <div id="verify-msg" style="font-size:.88rem;color:#6b7280;margin-bottom:1rem;min-height:24px;text-align:center;padding:0 1rem"></div>
+      <button class="btn-primary large full-width" id="verify-btn" onclick="verifyIdentity()">
+        🔍 Verify My Identity
+      </button>
+      <button class="btn-secondary full-width" style="margin-top:.5rem;font-size:.85rem" onclick="skipVerify()">
+        Skip (No profile photo)
+      </button>
+      <div id="verify-error" class="error-msg" style="margin-top:.5rem;text-align:center"></div>
+    </div>
+  </div>
+
+  <!-- STEP 1: Interview (auto-starts after verify) -->
+  <div id="step-interview" class="step-screen" style="display:none">
+    <div class="interview-layout">
+
+      <!-- Video Panel -->
+      <div class="video-panel">
+        <div class="cam-placeholder" id="cam-placeholder">
+          <span>📷</span><p>Camera loading...</p>
+        </div>
+        <video id="preview" autoplay muted playsinline class="video-preview" style="display:none"></video>
+        <div class="video-overlay"></div>
+        <div id="rec-indicator" class="rec-dot" style="display:none">Recording</div>
+        <div id="timer-display" class="timer">00:00</div>
+      </div>
+
+      <!-- Question Panel -->
+      <div class="question-panel">
+        <div class="q-progress">
+          <span id="q-num">Question 1 of 6</span>
+          <div class="progress-bar">
+            <div id="progress-fill" class="progress-fill" style="width:16.6%"></div>
+          </div>
+        </div>
+
+        <div class="q-category" id="q-category">Introduction</div>
+        <div class="q-text" id="q-text">Loading question...</div>
+        <div class="q-hint" id="q-hint">⏱ Aim for 1–2 minutes</div>
+
+        <!-- Countdown before each question -->
+        <div id="state-countdown" style="display:none">
+          <div style="text-align:center;padding:1.5rem;background:#eef2ff;border-radius:12px;border:1px solid #c7d2fe">
+            <div id="countdown-num" style="font-size:3rem;font-weight:700;color:#6366f1;line-height:1">3</div>
+            <p style="font-size:.88rem;color:#6b7280;margin-top:.5rem">Recording starts automatically...</p>
+          </div>
+        </div>
+
+        <div id="state-recording" style="display:none">
+          <p class="state-hint recording-hint">🔴 Recording — speak clearly and confidently</p>
+          <button class="btn-danger large full-width" onclick="stopRecording()">
+            ⏹ Done Answering
+          </button>
+        </div>
+
+        <div id="state-processing" style="display:none">
+          <div style="display:flex;align-items:center;gap:1rem;padding:1rem;background:#eef2ff;border-radius:12px;border:1px solid #c7d2fe">
+            <div class="spinner" style="width:28px;height:28px;border-width:2px;flex-shrink:0"></div>
+            <div>
+              <p style="font-weight:500;color:#6366f1;margin-bottom:.2rem">Processing your answer...</p>
+              <p style="font-size:.82rem;color:#6b7280">Transcribing with Whisper AI</p>
+            </div>
+          </div>
+        </div>
+
+        <div id="state-next" style="display:none">
+          <div style="background:#ecfdf5;border:1px solid #6ee7b7;border-radius:12px;padding:1rem;text-align:center">
+            <p style="color:#059669;font-weight:500;margin-bottom:.5rem">✅ Answer recorded!</p>
+            <p style="font-size:.82rem;color:#6b7280">Next question in <span id="next-countdown">3</span>s...</p>
+          </div>
+        </div>
+
+        <div id="transcript-preview" class="transcript-box" style="display:none;margin-top:.75rem">
+          <strong>Your answer (transcribed)</strong>
+          <p id="transcript-text"></p>
+        </div>
+
+        <div id="q-counter" style="margin-top:auto;padding-top:1rem;border-top:1px solid #e5e7eb;display:flex;gap:.5rem;flex-wrap:wrap"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 2: Submitting -->
+  <div id="step-submitting" class="step-screen" style="display:none">
+    <div class="submitting-card">
+      <div class="spinner"></div>
+      <h2>Analysing your interview...</h2>
+      <p>Scoring all responses with MAG-BERT-ARL</p>
+      <div class="submit-steps">
+        <div id="sub1" class="sub-step active">📝 Transcribing audio responses</div>
+        <div id="sub2" class="sub-step">🧠 Evaluating technical knowledge</div>
+        <div id="sub3" class="sub-step">🎯 Scoring communication & confidence</div>
+        <div id="sub4" class="sub-step">📊 Generating your report</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const QUESTIONS        = {{ questions | safe }};
+const INTERVIEW_SET_ID = {{ interview_set_id if interview_set_id else 'null' }};
+
+let mediaStream    = null;
+let mediaRecorder  = null;
+let recordedChunks = [];
+let currentQ       = 0;
+let sessionId      = Date.now().toString();
+let answers        = [];
+let timerInterval  = null;
+let secondsElapsed = 0;
+let isRecording    = false;
+let isProcessing   = false;
+let verifyStream   = null;
+
+// ── FACE VERIFICATION ────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', async () => {
+  try {
+    verifyStream = await navigator.mediaDevices.getUserMedia({ video: true });
+    document.getElementById('verify-cam').srcObject = verifyStream;
+  } catch(e) {
+    skipVerify();
+  }
+});
+
+async function verifyIdentity() {
+  const btn = document.getElementById('verify-btn');
+  btn.textContent = '⏳ Verifying...';
+  btn.disabled    = true;
+
+  const canvas = document.getElementById('verify-canvas');
+  const video  = document.getElementById('verify-cam');
+  canvas.width  = 300;
+  canvas.height = 300;
+  canvas.getContext('2d').drawImage(video, 0, 0, 300, 300);
+  const frame = canvas.toDataURL('image/jpeg', 0.85);
+
+  try {
+    const r = await fetch('/verify_face', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ frame })
+    });
+    const d = await r.json();
+    document.getElementById('verify-msg').textContent = d.message;
+
+    if (d.verified || d.skip) {
+      document.getElementById('verify-msg').style.color = '#059669';
+      stopVerifyStream();
+      setTimeout(startInterview, 1000);
+    } else {
+      document.getElementById('verify-error').textContent = d.message;
+      btn.textContent = '🔍 Try Again';
+      btn.disabled    = false;
+    }
+  } catch(e) {
+    skipVerify();
+  }
+}
+
+function skipVerify() {
+  stopVerifyStream();
+  startInterview();
+}
+
+function stopVerifyStream() {
+  if (verifyStream) verifyStream.getTracks().forEach(t => t.stop());
+  verifyStream = null;
+}
+
+// ── START INTERVIEW (auto after verification) ────────────────────────────────
+async function startInterview() {
+  document.getElementById('step-verify').style.display    = 'none';
+  document.getElementById('step-interview').style.display = 'block';
+
+  // Request camera + mic
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({
+      video: { width:{ideal:1280}, height:{ideal:720}, facingMode:'user' },
+      audio: true
+    });
+    document.getElementById('preview').srcObject    = mediaStream;
+    document.getElementById('preview').style.display = 'block';
+    document.getElementById('cam-placeholder').style.display = 'none';
+  } catch(e) {
+    console.error('Camera error:', e);
+  }
+
+  buildCounter();
+  loadQuestion(0);
+  // Auto start first question after 2 seconds
+  setTimeout(() => startCountdown(), 2000);
+}
+
+// ── QUESTION DOTS ─────────────────────────────────────────────────────────────
+function buildCounter() {
+  const el = document.getElementById('q-counter');
+  if (!el) return;
+  el.innerHTML = QUESTIONS.map((q,i) => `
+    <div id="dot-${i}" style="width:30px;height:30px;border-radius:50%;
+      background:${i===0?'linear-gradient(135deg,#6366f1,#8b5cf6)':'#f3f4f6'};
+      display:flex;align-items:center;justify-content:center;
+      font-size:.72rem;font-weight:600;
+      color:${i===0?'#fff':'#9ca3af'};
+      border:1.5px solid ${i===0?'#a5b4fc':'#e5e7eb'};
+      transition:all .3s">${i+1}</div>
+  `).join('');
+}
+
+function updateDots(idx) {
+  QUESTIONS.forEach((_,i) => {
+    const dot = document.getElementById(`dot-${i}`);
+    if (!dot) return;
+    const done = i < idx, curr = i === idx;
+    dot.style.background  = done ? '#ecfdf5' : curr ? 'linear-gradient(135deg,#6366f1,#8b5cf6)' : '#f3f4f6';
+    dot.style.color       = done ? '#059669' : curr ? '#fff' : '#9ca3af';
+    dot.style.borderColor = done ? '#6ee7b7' : curr ? '#a5b4fc' : '#e5e7eb';
+    dot.textContent       = done ? '✓' : i+1;
+  });
+}
+
+// ── LOAD QUESTION ─────────────────────────────────────────────────────────────
+function loadQuestion(idx) {
+  const q = QUESTIONS[idx];
+  document.getElementById('q-num').textContent      = `Question ${idx+1} of ${QUESTIONS.length}`;
+  document.getElementById('q-category').textContent = q.category;
+  document.getElementById('q-text').textContent     = q.text;
+  document.getElementById('q-hint').textContent     = `⏱ Aim for ${q.hint}`;
+  document.getElementById('progress-fill').style.width = `${(idx+1)/QUESTIONS.length*100}%`;
+  document.getElementById('timer-display').textContent = '00:00';
+  document.getElementById('rec-indicator').style.display      = 'none';
+  document.getElementById('transcript-preview').style.display = 'none';
+  showState('none');
+  updateDots(idx);
+}
+
+function showState(s) {
+  ['countdown','recording','processing','next'].forEach(id => {
+    document.getElementById(`state-${id}`).style.display =
+      s === id ? 'block' : 'none';
+  });
+}
+
+// ── COUNTDOWN BEFORE RECORDING ────────────────────────────────────────────────
+function startCountdown() {
+  if (isProcessing || isRecording) return;
+  let count = 3;
+  showState('countdown');
+  document.getElementById('countdown-num').textContent = count;
+
+  const interval = setInterval(() => {
+    count--;
+    if (count <= 0) {
+      clearInterval(interval);
+      showState('none');
+      startRecording();
+    } else {
+      document.getElementById('countdown-num').textContent = count;
+    }
+  }, 1000);
+}
+
+// ── RECORDING ─────────────────────────────────────────────────────────────────
+function startRecording() {
+  if (isRecording || isProcessing || !mediaStream) return;
+  recordedChunks = [];
+
+  try {
+    mediaRecorder = new MediaRecorder(mediaStream);
+  } catch(e) {
+    console.error('MediaRecorder failed:', e);
+    return;
+  }
+
+  mediaRecorder.ondataavailable = e => {
+    if (e.data && e.data.size > 0) recordedChunks.push(e.data);
+  };
+
+  mediaRecorder.start(500);
+  isRecording = true;
+  showState('recording');
+  document.getElementById('rec-indicator').style.display = 'flex';
+
+  secondsElapsed = 0;
+  clearInterval(timerInterval);
+  timerInterval = setInterval(() => {
+    secondsElapsed++;
+    const m = String(Math.floor(secondsElapsed/60)).padStart(2,'0');
+    const s = String(secondsElapsed%60).padStart(2,'0');
+    document.getElementById('timer-display').textContent = `${m}:${s}`;
+  }, 1000);
+}
+
+// ── STOP RECORDING ────────────────────────────────────────────────────────────
+async function stopRecording() {
+  if (!isRecording || isProcessing) return;
+  isRecording  = false;
+  isProcessing = true;
+  clearInterval(timerInterval);
+  showState('processing');
+  document.getElementById('rec-indicator').style.display = 'none';
+
+  await new Promise(resolve => {
+    mediaRecorder.onstop = resolve;
+    mediaRecorder.stop();
+  });
+  await new Promise(r => setTimeout(r, 300));
+
+  const q    = QUESTIONS[currentQ];
+  const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+
+  let uploadPath = '', transcript = '';
+
+  if (blob.size > 500) {
+    try {
+      const fd = new FormData();
+      fd.append('audio',       blob,     `q${q.id}.webm`);
+      fd.append('question_id', q.id);
+      fd.append('session_id',  sessionId);
+      const ur = await fetch('/upload_audio', { method:'POST', body:fd });
+      const ud = await ur.json();
+      uploadPath = ud.path || '';
+    } catch(e) { console.error('Upload error:', e); }
+
+    if (uploadPath) {
+      try {
+        const tr = await fetch('/transcribe', {
+          method:  'POST',
+          headers: { 'Content-Type':'application/json' },
+          body:    JSON.stringify({ filepath: uploadPath })
+        });
+        const td = await tr.json();
+        transcript = td.transcript || '';
+      } catch(e) { console.error('Transcribe error:', e); }
+    }
+  }
+
+  // Show transcript
+  document.getElementById('transcript-text').textContent      = transcript || '(no speech detected)';
+  document.getElementById('transcript-preview').style.display = 'block';
+
+  answers.push({
+    question_id: q.id,
+    question:    q.text,
+    transcript:  transcript,
+    audio_path:  uploadPath,
+  });
+
+  isProcessing = false;
+
+  // Show "next question in 3s" countdown
+  currentQ++;
+  if (currentQ < QUESTIONS.length) {
+    showState('next');
+    let nc = 3;
+    document.getElementById('next-countdown').textContent = nc;
+    const ni = setInterval(() => {
+      nc--;
+      document.getElementById('next-countdown').textContent = nc;
+      if (nc <= 0) {
+        clearInterval(ni);
+        loadQuestion(currentQ);
+        setTimeout(() => startCountdown(), 500);
+      }
+    }, 1000);
+  } else {
+    showState('next');
+    setTimeout(submitInterview, 2000);
+  }
+}
+
+// ── SUBMIT ────────────────────────────────────────────────────────────────────
+async function submitInterview() {
+  document.getElementById('step-interview').style.display  = 'none';
+  document.getElementById('step-submitting').style.display = 'block';
+  if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
+
+  const steps = ['sub1','sub2','sub3','sub4'];
+  for (let i = 0; i < steps.length; i++) {
+    await new Promise(r => setTimeout(r, 1800));
+    document.getElementById(steps[i]).classList.add('done');
+    if (i+1 < steps.length) document.getElementById(steps[i+1]).classList.add('active');
+  }
+
+  try {
+    const res  = await fetch('/evaluate', {
+      method:  'POST',
+      headers: { 'Content-Type':'application/json' },
+      body:    JSON.stringify({ answers, interview_set_id: INTERVIEW_SET_ID })
+    });
+    const data = await res.json();
+    if (data.success) {
+      window.location = `/results/${data.session_id}`;
+    } else {
+      alert('Scoring error: ' + (data.error || 'Unknown'));
+    }
+  } catch(e) {
+    alert('Network error: ' + e.message);
+  }
+}
+</script>
+{% endblock %}

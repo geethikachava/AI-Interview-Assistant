@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Interview History — AI Assistant Interviews{% endblock %}
+{% block content %}
+<div class="page-container">
+  <div class="page-header">
+    <h2>Your Interview History</h2>
+    <a href="/interview" class="btn-primary">New Interview</a>
+  </div>
+
+  {% if improvement.has_comparison %}
+  <div class="card improve-card {% if improvement.trend=='improved' %}success-card{% elif improvement.trend=='declined' %}danger-card{% else %}info-card{% endif %}">
+    <h3>Progress Tracker</h3>
+    <p>{{ improvement.message }}</p>
+    <div class="improve-grid">
+      <div><span class="imp-label">Latest</span><span class="imp-val">{{ (improvement.latest_overall or 0)|round(1) }}/10</span></div>
+      <div><span class="imp-label">Previous</span><span class="imp-val">{{ (improvement.prev_overall or 0)|round(1) }}/10</span></div>
+      <div><span class="imp-label">Change</span>
+        <span class="imp-val {% if improvement.overall_diff >= 0 %}pos{% else %}neg{% endif %}">
+          {% if improvement.overall_diff >= 0 %}+{% endif %}{{ improvement.overall_diff }}
+        </span>
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div class="card info-card">
+    <p>{{ improvement.message }}</p>
+  </div>
+  {% endif %}
+
+  {% if history %}
+  <div class="history-list">
+    {% for s in history %}
+    <div class="history-card">
+      <div class="hc-left">
+        <div class="hc-session">Session #{{ s.session_num }}</div>
+        <div class="hc-date">{{ s.started_at[:16] if s.started_at else 'N/A' }}</div>
+      </div>
+      <div class="hc-scores">
+        <div class="hc-dim"><span>Technical</span><strong>{{ (s.tech_score or 0)|round(1) }}</strong></div>
+        <div class="hc-dim"><span>Soft Skills</span><strong>{{ (s.soft_score or 0)|round(1) }}</strong></div>
+        <div class="hc-dim"><span>Overall</span><strong>{{ (s.overall_score or 0)|round(1) }}</strong></div>
+      </div>
+      <div class="hc-right">
+        <div class="hc-decision {% if s.overall_score and s.overall_score >= 7 %}hire{% else %}nohire{% endif %}">
+          {{ s.decision or 'N/A' }}
+        </div>
+        <a href="/results/{{ s.id }}" class="btn-sm">View Report</a>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card">
+    <p style="text-align:center;color:#888">No interviews yet. <a href="/interview">Start your first interview!</a></p>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

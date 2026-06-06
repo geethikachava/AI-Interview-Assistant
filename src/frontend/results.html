@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+{% block title %}Your Results — AI Assistant Interviews{% endblock %}
+{% block content %}
+<div class="page-container" id="results-root">
+  <div class="loading-screen">
+    <div class="spinner"></div>
+    <p>Loading your results...</p>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const SESSION_ID = {{ session_id }};
+
+async function loadResults() {
+  const res  = await fetch(`/api/session_results/${SESSION_ID}`);
+  const data = await res.json();
+  if (!data.results) {
+    document.getElementById('results-root').innerHTML = '<p style="text-align:center;padding:3rem;color:#6b7280">Results not found.</p>';
+    return;
+  }
+
+  const r  = data.results;
+  const sc = r.scores || {};
+  const imp= data.improvement || {};
+
+  // Score dimensions
+  const dims = [
+    {label:"Communication Skills",  score: sc.communication_skill  || 0, icon:"💬"},
+    {label:"Confidence Level",      score: sc.confidence_level     || 0, icon:"💪"},
+    {label:"Keywords Matched",      score: sc.keywords_matched     || 0, icon:"🔑"},
+    {label:"Work Values",           score: sc.work_values          || 0, icon:"🤝"},
+    {label:"Technical Relevancy",   score: sc.technical_relevancy  || 0, icon:"⚙️"},
+  ];
+
+  // Improvement section
+  let improvHtml = '';
+  if (imp && imp.has_comparison) {
+    const arrow = imp.trend==='improved' ? '↑' : (imp.trend==='declined' ? '↓' : '→');
+    const cls   = imp.trend==='improved' ? 'success-card' : (imp.trend==='declined' ? 'danger-card' : 'info-card');
+    improvHtml = `
+      <div class="card ${cls}">
+        <h3>📈 Progress vs Last Interview</h3>
+        <p class="improve-msg">${arrow} ${imp.message}</p>
+        <div class="improve-grid">
+          <div><span class="imp-label">Overall</span><span class="imp-val ${(imp.overall_diff||0)>=0?'pos':'neg'}">${(imp.overall_diff||0)>=0?'+':''}${imp.overall_diff||0}</span></div>
+          <div><span class="imp-label">Technical</span><span class="imp-val ${(imp.tech_diff||0)>=0?'pos':'neg'}">${(imp.tech_diff||0)>=0?'+':''}${imp.tech_diff||0}</span></div>
+          <div><span class="imp-label">Soft Skills</span><span class="imp-val ${(imp.soft_diff||0)>=0?'pos':'neg'}">${(imp.soft_diff||0)>=0?'+':''}${imp.soft_diff||0}</span></div>
+        </div>
+      </div>`;
+  }
+
+  // Suggestions
+  const sugs = r.suggestions || [];
+  let suggestHtml = sugs.length > 0
+    ? sugs.map(s => `
+        <div class="suggest-item">
+          <div class="suggest-area">${s.area} — ${(s.score||0).toFixed(1)}/10</div>
+          <div class="suggest-tip">💡 ${s.tip}</div>
+        </div>`).join('')
+    : '<p class="good-msg">✅ Strong performance across all areas!</p>';
+
+  // Per-question breakdown — NOW SHOWS QUESTION TEXT
+  let qHtml = Object.entries(r.per_question || {}).map(([qid, q]) => {
+    const overall   = q.overall || 0;
+    const scoreClass = overall>=7?'good':overall>=5?'ok':'bad';
+    const questionText = q.question || `Question ${qid}`;
+    return `
+      <div class="q-result-card">
+        <div class="qr-header">
+          <span class="qr-num">Q${qid}</span>
+          <span class="qr-score ${scoreClass}">${overall.toFixed(1)}/10</span>
+        </div>
+        <div style="font-size:.88rem;color:#374151;font-weight:500;margin-bottom:.5rem;line-height:1.5">
+          📌 ${questionText}
+        </div>
+        <div class="qr-feedback">${q.feedback || ''}</div>
+        <div class="qr-dims">
+          ${[
+            ['communication',       q.communication       || 0],
+            ['confidence',          q.confidence          || 0],
+            ['keywords matched',    q.keywords_matched    || 0],
+            ['work values',         q.work_values         || 0],
+            ['technical relevancy', q.technical_relevancy || 0],
+          ].map(([k,v]) => `
+            <div class="qr-dim">
+              <span>${k}</span><span>${v.toFixed(1)}</span>
+            </div>`).join('')}
+        </div>
+      </div>`;
+  }).join('');
+
+  document.getElementById('results-root').innerHTML = `
+    <div class="page-header">
+      <h2>Interview Results</h2>
+      <a href="/history" class="btn-secondary">View All Sessions</a>
+    </div>
+
+    <!-- Decision banner -->
+    <div class="decision-banner ${(r.overall_score||0)>=7?'hire':'nohire'}">
+      <div class="decision-icon">${r.decision_icon || '📊'}</div>
+      <div>
+        <div class="decision-label">${r.decision || 'Result'}</div>
+        <div class="decision-score">Overall Score: ${(r.overall_score||0).toFixed(1)} / 10</div>
+      </div>
+    </div>
+
+    <!-- 3 Score cards -->
+    <div class="score-summary">
+      <div class="score-card">
+        <div class="sc-label">Technical Score</div>
+        <div class="sc-value">${(sc.overall_technical||0).toFixed(1)}</div>
+        <div class="sc-sub">/ 10</div>
+      </div>
+      <div class="score-card">
+        <div class="sc-label">Soft Skills Score</div>
+        <div class="sc-value">${(sc.overall_soft||0).toFixed(1)}</div>
+        <div class="sc-sub">/ 10</div>
+      </div>
+      <div class="score-card highlight">
+        <div class="sc-label">Overall Score</div>
+        <div class="sc-value">${(r.overall_score||0).toFixed(1)}</div>
+        <div class="sc-sub">/ 10</div>
+      </div>
+    </div>
+
+    <!-- 5 Dimension scores with bars -->
+    <div class="card">
+      <h3>Score Breakdown</h3>
+      <div class="dim-list">
+        ${dims.map(d => `
+          <div class="dim-row">
+            <span class="dim-icon">${d.icon}</span>
+            <span class="dim-label">${d.label}</span>
+            <div class="dim-bar-wrap"><div class="dim-bar" style="width:${(d.score||0)*10}%"></div></div>
+            <span class="dim-score">${(d.score||0).toFixed(1)}</span>
+          </div>`).join('')}
+      </div>
+    </div>
+
+    <!-- Improvement -->
+    ${improvHtml}
+
+    <!-- Suggestions -->
+    <div class="card">
+      <h3>💡 Where to Improve</h3>
+      ${suggestHtml}
+    </div>
+
+    <!-- Per-question with question text -->
+    <div class="card">
+      <h3>📋 Question by Question Breakdown</h3>
+      <div class="q-results">${qHtml}</div>
+    </div>
+
+    <div class="btn-row">
+      <a href="/interview" class="btn-primary">Take Another Interview</a>
+      <a href="/history"   class="btn-secondary">View History</a>
+    </div>
+  `;
+}
+loadResults();
+</script>
+{% endblock %}

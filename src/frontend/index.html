@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}AI Assistant Interviews — Login{% endblock %}
+{% block content %}
+<div class="auth-page">
+  <div class="auth-card">
+    <div class="auth-logo">🤖</div>
+    <h1 class="auth-title">AI Assistant Interviews</h1>
+    <p class="auth-sub">Smart interview assessment powered by MAG-BERT-ARL</p>
+
+    <div class="auth-tabs">
+      <button class="tab-btn active" onclick="switchTab('login')">Login</button>
+      <button class="tab-btn" onclick="switchTab('signup')">Sign Up</button>
+    </div>
+
+    <!-- LOGIN -->
+    <div id="login-form">
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="login-email" placeholder="you@example.com">
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="login-password" placeholder="Your password">
+      </div>
+      <div id="login-error" class="error-msg"></div>
+      <button class="btn-primary full-width" style="margin-top:.5rem" onclick="doLogin()">Login →</button>
+    </div>
+
+    <!-- SIGNUP -->
+    <div id="signup-form" style="display:none">
+      <div class="role-selector">
+        <div class="role-card active" id="role-candidate" onclick="selectRole('candidate')">
+          <div class="role-icon">🎓</div>
+          <div class="role-label">Candidate</div>
+          <div class="role-sub">Student / Fresher / Job Seeker</div>
+        </div>
+        <div class="role-card" id="role-interviewer" onclick="selectRole('interviewer')">
+          <div class="role-icon">💼</div>
+          <div class="role-label">Interviewer</div>
+          <div class="role-sub">HR / Recruiter / Manager</div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="signup-email" placeholder="you@example.com">
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="signup-password" placeholder="Choose a password">
+      </div>
+      <div class="form-group">
+        <label>Confirm Password</label>
+        <input type="password" id="signup-confirm" placeholder="Repeat password">
+      </div>
+      <div id="signup-error" class="error-msg"></div>
+      <button class="btn-primary full-width" style="margin-top:.5rem" onclick="doSignup()">Create Account →</button>
+    </div>
+  </div>
+</div>
+
+<style>
+.role-selector{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:1.25rem}
+.role-card{border:2px solid #e5e7eb;border-radius:12px;padding:1rem .75rem;text-align:center;cursor:pointer;transition:all .2s;background:#f9fafb}
+.role-card:hover{border-color:#a5b4fc;background:#eef2ff}
+.role-card.active{border-color:#6366f1;background:#eef2ff;box-shadow:0 0 0 3px rgba(99,102,241,0.15)}
+.role-icon{font-size:1.75rem;margin-bottom:.35rem}
+.role-label{font-weight:600;font-size:.9rem;color:#1e1e2e}
+.role-sub{font-size:.72rem;color:#6b7280;margin-top:.2rem}
+</style>
+
+<script>
+let selectedRole = 'candidate';
+
+function selectRole(role) {
+  selectedRole = role;
+  document.getElementById('role-candidate').classList.toggle('active', role==='candidate');
+  document.getElementById('role-interviewer').classList.toggle('active', role==='interviewer');
+}
+
+function switchTab(tab) {
+  document.getElementById('login-form').style.display  = tab==='login'  ? 'block' : 'none';
+  document.getElementById('signup-form').style.display = tab==='signup' ? 'block' : 'none';
+  document.querySelectorAll('.tab-btn').forEach((b,i)=>b.classList.toggle('active',(i===0&&tab==='login')||(i===1&&tab==='signup')));
+}
+
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const pass  = document.getElementById('login-password').value;
+  if (!email||!pass){document.getElementById('login-error').textContent='Fill all fields.';return;}
+  const r = await fetch('/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password:pass})});
+  const d = await r.json();
+  if (d.success) {
+    // Use redirect from server (handles pending interview links)
+    window.location = d.redirect || (d.role==='interviewer' ? '/interviewer' : '/profile');
+  } else {
+    document.getElementById('login-error').textContent = d.error;
+  }
+}
+
+async function doSignup() {
+  const email = document.getElementById('signup-email').value.trim();
+  const pass  = document.getElementById('signup-password').value;
+  const conf  = document.getElementById('signup-confirm').value;
+  if (!email||!pass){document.getElementById('signup-error').textContent='Fill all fields.';return;}
+  if (pass!==conf){document.getElementById('signup-error').textContent='Passwords do not match.';return;}
+  const r = await fetch('/signup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password:pass,role:selectedRole})});
+  const d = await r.json();
+  if (d.success) {
+    window.location = d.redirect || (d.role==='interviewer' ? '/interviewer_profile' : '/profile');
+  } else {
+    document.getElementById('signup-error').textContent = d.error;
+  }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,66 @@
+INTERVIEWER_PROFILE_HTML
+{% extends "base.html" %}
+{% block title %}Interviewer Profile — AI Assistant Interviews{% endblock %}
+{% block content %}
+<div class="page-container">
+  <div class="page-header">
+    <h2>Interviewer Profile</h2>
+    <a href="/interviewer" class="btn-secondary">Dashboard →</a>
+  </div>
+
+  <div style="display:grid;grid-template-columns:260px 1fr;gap:1.5rem;align-items:start">
+    <!-- Photo -->
+    <div class="card" style="text-align:center">
+      <h3>Profile Photo</h3>
+      <div style="position:relative;width:140px;height:140px;margin:0 auto 1rem">
+        <img id="profile-photo-preview"
+          src="{{ '/profile_photos/user_' + user.id|string + '_photo.jpg' if user and user.profile_photo else '' }}"
+          onerror="this.style.display='none';document.getElementById('photo-placeholder').style.display='flex'"
+          style="width:140px;height:140px;border-radius:50%;object-fit:cover;border:3px solid #c7d2fe;display:{{ 'block' if user and user.profile_photo else 'none' }}">
+        <div id="photo-placeholder" style="width:140px;height:140px;border-radius:50%;background:#eef2ff;border:3px dashed #a5b4fc;display:{{ 'none' if user and user.profile_photo else 'flex' }};align-items:center;justify-content:center;flex-direction:column;gap:.4rem;color:#6b7280;font-size:.8rem">
+          <span style="font-size:2.5rem">📷</span>No photo
+        </div>
+      </div>
+      <video id="photo-cam" autoplay muted playsinline style="display:none;width:140px;height:140px;border-radius:50%;object-fit:cover;border:3px solid #6366f1;margin:0 auto 1rem"></video>
+      <canvas id="photo-canvas" style="display:none"></canvas>
+      <div id="photo-btns">
+        <button class="btn-primary full-width" onclick="openCamera()" style="font-size:.85rem;padding:.6rem">📷 Take Photo</button>
+      </div>
+      <div id="camera-btns" style="display:none">
+        <button class="btn-primary full-width" onclick="capturePhoto()" style="margin-bottom:.5rem;font-size:.85rem;padding:.6rem">✅ Capture</button>
+        <button class="btn-secondary full-width" onclick="closeCamera()" style="font-size:.85rem;padding:.6rem">Cancel</button>
+      </div>
+      <div id="photo-msg" class="success-msg" style="display:none;margin-top:.5rem">Photo saved!</div>
+    </div>
+
+    <!-- Details -->
+    <div class="card">
+      <h3>Professional Details</h3>
+      <div class="form-group">
+        <label>Full Name</label>
+        <input type="text" id="full_name" value="{{ profile.full_name if profile else '' }}" placeholder="Your full name">
+      </div>
+      <div class="form-group">
+        <label>Company / Organization</label>
+        <input type="text" id="company" value="{{ profile.company if profile else '' }}" placeholder="Company name">
+      </div>
+      <div class="form-group">
+        <label>Designation / Role</label>
+        <input type="text" id="designation" value="{{ profile.designation if profile else '' }}" placeholder="e.g. HR Manager, Tech Lead">
+      </div>
+      <div id="profile-msg" class="success-msg" style="display:none">✅ Profile saved!</div>
+      <div class="btn-row">
+        <button class="btn-primary" onclick="saveProfile()">Save Profile</button>
+        <a href="/interviewer" class="btn-secondary">Go to Dashboard →</a>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+let camStream=null;
+async function openCamera(){try{camStream=await navigator.mediaDevices.getUserMedia({video:true});document.getElementById('photo-cam').srcObject=camStream;document.getElementById('photo-cam').style.display='block';document.getElementById('photo-btns').style.display='none';document.getElementById('camera-btns').style.display='block';}catch(e){alert('Camera error: '+e.message);}}
+function capturePhoto(){const v=document.getElementById('photo-cam'),c=document.getElementById('photo-canvas');c.width=300;c.height=300;c.getContext('2d').drawImage(v,0,0,300,300);const b64=c.toDataURL('image/jpeg',0.85);fetch('/upload_photo',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({image:b64})}).then(r=>r.json()).then(d=>{if(d.success){document.getElementById('profile-photo-preview').src=b64;document.getElementById('profile-photo-preview').style.display='block';document.getElementById('photo-msg').style.display='block';setTimeout(()=>document.getElementById('photo-msg').style.display='none',3000);}closeCamera();});}
+function closeCamera(){if(camStream)camStream.getTracks().forEach(t=>t.stop());document.getElementById('photo-cam').style.display='none';document.getElementById('photo-btns').style.display='block';document.getElementById('camera-btns').style.display='none';}
+async function saveProfile(){const data={full_name:document.getElementById('full_name').value,company:document.getElementById('company').value,designation:document.getElementById('designation').value};const r=await fetch('/interviewer_profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});const d=await r.json();if(d.success){document.getElementById('profile-msg').style.display='block';setTimeout(()=>document.getElementById('profile-msg').style.display='none',3000);}}
+</script>
+{% endblock %}

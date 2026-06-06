@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+{% block title %}Your Profile — AI Assistant Interviews{% endblock %}
+{% block content %}
+<div class="page-container">
+  <div class="page-header">
+    <h2>Your Profile</h2>
+    <p>Complete your profile before starting the interview</p>
+  </div>
+
+  <div style="display:grid;grid-template-columns:260px 1fr;gap:1.5rem;align-items:start">
+
+    <!-- Profile Photo Card -->
+    <div class="card" style="text-align:center">
+      <h3>Profile Photo</h3>
+      <p style="font-size:.82rem;color:#6b7280;margin-bottom:1rem;line-height:1.5">
+        Your photo is used to verify your identity before each interview.
+      </p>
+
+      <div style="position:relative;width:140px;height:140px;margin:0 auto 1rem">
+        <img id="profile-photo-preview"
+          src="{{ '/profile_photos/user_' + user.id|string + '_photo.jpg' if user and user.profile_photo else '' }}"
+          onerror="this.style.display='none';document.getElementById('photo-placeholder').style.display='flex'"
+          style="width:140px;height:140px;border-radius:50%;object-fit:cover;border:3px solid #c7d2fe;display:{{ 'block' if user and user.profile_photo else 'none' }}">
+        <div id="photo-placeholder" style="width:140px;height:140px;border-radius:50%;background:#eef2ff;border:3px dashed #a5b4fc;display:{{ 'none' if user and user.profile_photo else 'flex' }};align-items:center;justify-content:center;flex-direction:column;gap:.4rem;color:#6b7280;font-size:.8rem">
+          <span style="font-size:2.5rem">📷</span>No photo
+        </div>
+      </div>
+
+      <!-- Camera capture -->
+      <video id="photo-cam" autoplay muted playsinline
+        style="display:none;width:140px;height:140px;border-radius:50%;object-fit:cover;border:3px solid #6366f1;margin:0 auto 1rem"></video>
+      <canvas id="photo-canvas" style="display:none"></canvas>
+
+      <div id="photo-btns">
+        <button class="btn-primary full-width" onclick="openCamera()" style="margin-bottom:.5rem;font-size:.85rem;padding:.6rem">
+          📷 Take Photo
+        </button>
+      </div>
+      <div id="camera-btns" style="display:none">
+        <button class="btn-primary full-width" onclick="capturePhoto()" style="margin-bottom:.5rem;font-size:.85rem;padding:.6rem">
+          ✅ Capture
+        </button>
+        <button class="btn-secondary full-width" onclick="closeCamera()" style="font-size:.85rem;padding:.6rem">
+          Cancel
+        </button>
+      </div>
+
+      <div id="photo-msg" class="success-msg" style="display:none;margin-top:.5rem">Photo saved!</div>
+      <div id="photo-err" class="error-msg"></div>
+    </div>
+
+    <!-- Profile Details Card -->
+    <div class="card profile-card">
+      <h3>Personal Details</h3>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Full Name</label>
+          <input type="text" id="full_name" value="{{ profile.full_name if profile and profile.full_name else '' }}" placeholder="Your full name">
+        </div>
+        <div class="form-group">
+          <label>Age</label>
+          <input type="number" id="age" value="{{ profile.age if profile and profile.age else '' }}" placeholder="Your age" min="16" max="70">
+        </div>
+        <div class="form-group">
+          <label>Gender</label>
+          <select id="gender">
+            <option value="">Select gender</option>
+            <option value="Male">Male</option>
+            <option value="Female">Female</option>
+            <option value="Other">Other</option>
+            <option value="Prefer not to say">Prefer not to say</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Education</label>
+          <select id="education">
+            <option value="">Select education</option>
+            <option value="High School">High School</option>
+            <option value="B.Tech / B.E">B.Tech / B.E</option>
+            <option value="BCA / B.Sc CS">BCA / B.Sc CS</option>
+            <option value="MCA / M.Tech">MCA / M.Tech</option>
+            <option value="MBA">MBA</option>
+            <option value="PhD">PhD</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Current Status</label>
+          <select id="occupation">
+            <option value="">Select status</option>
+            <option value="Student">Student</option>
+            <option value="Fresher">Fresher (0-1 yr)</option>
+            <option value="Junior Developer">Junior Developer</option>
+            <option value="Mid-level Engineer">Mid-level Engineer</option>
+            <option value="Senior Engineer">Senior Engineer</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Years of Experience</label>
+          <select id="experience">
+            <option value="">Select experience</option>
+            <option value="0">0 (Fresher/Student)</option>
+            <option value="1">1 year</option>
+            <option value="2">2 years</option>
+            <option value="3-5">3-5 years</option>
+            <option value="5+">5+ years</option>
+          </select>
+        </div>
+      </div>
+      <div id="profile-msg" class="success-msg" style="display:none">✅ Profile saved!</div>
+      <div id="profile-err" class="error-msg"></div>
+      <div class="btn-row">
+        <button class="btn-primary" onclick="saveProfile()">Save Profile</button>
+        <a href="/interview" class="btn-secondary">Start Interview →</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const saved = {
+  gender:     "{{ profile.gender     if profile and profile.gender     else '' }}",
+  education:  "{{ profile.education  if profile and profile.education  else '' }}",
+  occupation: "{{ profile.occupation if profile and profile.occupation else '' }}",
+  experience: "{{ profile.experience if profile and profile.experience else '' }}",
+};
+
+window.addEventListener('DOMContentLoaded', () => {
+  ['gender','education','occupation','experience'].forEach(id => {
+    const el = document.getElementById(id);
+    const val = saved[id];
+    if (el && val) {
+      for (let opt of el.options) {
+        if (opt.value === val) { opt.selected = true; break; }
+      }
+    }
+  });
+});
+
+let camStream = null;
+
+async function openCamera() {
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({video:true});
+    document.getElementById('photo-cam').srcObject = camStream;
+    document.getElementById('photo-cam').style.display = 'block';
+    document.getElementById('photo-btns').style.display = 'none';
+    document.getElementById('camera-btns').style.display = 'block';
+    document.getElementById('photo-placeholder').style.display = 'none';
+    document.getElementById('profile-photo-preview').style.display = 'none';
+  } catch(e) {
+    document.getElementById('photo-err').textContent = 'Cannot access camera: ' + e.message;
+  }
+}
+
+function capturePhoto() {
+  const video  = document.getElementById('photo-cam');
+  const canvas = document.getElementById('photo-canvas');
+  canvas.width  = 300;
+  canvas.height = 300;
+  canvas.getContext('2d').drawImage(video, 0, 0, 300, 300);
+  const b64 = canvas.toDataURL('image/jpeg', 0.85);
+
+  fetch('/upload_photo', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({image: b64})
+  }).then(r=>r.json()).then(d => {
+    if (d.success) {
+      document.getElementById('profile-photo-preview').src = b64;
+      document.getElementById('profile-photo-preview').style.display = 'block';
+      document.getElementById('photo-msg').style.display = 'block';
+      setTimeout(()=>document.getElementById('photo-msg').style.display='none', 3000);
+    }
+    closeCamera();
+  });
+}
+
+function closeCamera() {
+  if (camStream) camStream.getTracks().forEach(t=>t.stop());
+  document.getElementById('photo-cam').style.display = 'none';
+  document.getElementById('photo-btns').style.display = 'block';
+  document.getElementById('camera-btns').style.display = 'none';
+}
+
+async function saveProfile() {
+  const data = {
+    full_name:  document.getElementById('full_name').value.trim(),
+    age:        document.getElementById('age').value,
+    gender:     document.getElementById('gender').value,
+    education:  document.getElementById('education').value,
+    occupation: document.getElementById('occupation').value,
+    experience: document.getElementById('experience').value,
+  };
+  if (!data.full_name) { document.getElementById('profile-err').textContent='Please enter your name.'; return; }
+  const r = await fetch('/profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+  const d = await r.json();
+  if (d.success) {
+    document.getElementById('profile-msg').style.display='block';
+    document.getElementById('profile-err').textContent='';
+    setTimeout(()=>document.getElementById('profile-msg').style.display='none',3000);
+  }
+}
+</script>
+{% endblock %}

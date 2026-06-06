@@ -1,0 +1,8 @@
+flask>=3.0.0
+torch>=2.0.0
+transformers>=4.35.0
+numpy>=1.24.0
+soundfile>=0.12.1
+openai-whisper>=20231117
+imageio-ffmpeg>=0.4.9
+scipy>=1.11.0

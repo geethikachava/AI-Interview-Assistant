@@ -1,0 +1,89 @@
+# ========================
+# Python
+# ========================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+*.pdb
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# ========================
+# Virtual Environment
+# ========================
+venv/
+env/
+.venv/
+.env/
+ENV/
+
+# ========================
+# Environment Variables
+# ========================
+.env
+.env.*
+*.env
+secrets.py
+
+# ========================
+# Database
+# ========================
+*.db
+*.sqlite
+*.sqlite3
+
+# ========================
+# Uploads & User Data
+# ========================
+uploads/
+profile_photos/
+
+# ========================
+# Flask / Web
+# ========================
+instance/
+.webassets-cache
+flask_session/
+
+# ========================
+# IDE & Editor
+# ========================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ========================
+# OS Files
+# ========================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ========================
+# Logs & Temp
+# ========================
+*.log
+*.tmp
+*.bak
+logs/
+
+# ========================
+# Testing
+# ========================
+.pytest_cache/
+.coverage
+htmlcov/
+test_*.py
+*_test.py
+
+# ========================
+# Jupyter Notebooks (if any)
+# ========================
+.ipynb_checkpoints/

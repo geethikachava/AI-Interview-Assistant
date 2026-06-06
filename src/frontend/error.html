@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Error — AI Assistant Interviews{% endblock %}
+{% block content %}
+<div style="max-width:480px;margin:5rem auto;text-align:center;padding:0 1.5rem">
+  <div style="font-size:4rem;margin-bottom:1rem">⚠️</div>
+  <h2 style="font-size:1.4rem;font-weight:700;color:#1e1e2e;margin-bottom:.75rem">Something went wrong</h2>
+  <p style="color:#6b7280;font-size:.95rem;margin-bottom:1.5rem">{{ message }}</p>
+  <a href="/" class="btn-primary">Go to Home</a>
+</div>
+{% endblock %}
