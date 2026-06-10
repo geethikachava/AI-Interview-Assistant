@@ -1,18 +1,13 @@
-"""
-app.py — Complete fixed version
-Fixes:
-  1. Face verification more lenient
-  2. Auto next question (handled in interview.html)
-  3. Speech to text fixed via better transcriber.py
-  4. Shareable links work correctly for candidates only
-  5. After login redirect to pending interview link
-"""
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 from flask import (
     Flask, render_template, request, jsonify,
     session, redirect, url_for, send_from_directory
 )
-import os, uuid, json
+import uuid, json
 import numpy as np
 
 from database import (
@@ -27,11 +22,16 @@ from database import (
     log_face_verification, get_conn
 )
 
-app = Flask(__name__)
+_base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+app = Flask(__name__,
+    template_folder=os.path.join(_base, 'frontend'),
+    static_folder=os.path.join(_base, 'static')
+)
 app.secret_key = "ai_interview_secret_key_2025"
 
-UPLOAD_FOLDER = "uploads"
-PHOTO_FOLDER  = "profile_photos"
+_backend_dir  = os.path.dirname(os.path.abspath(__file__))
+UPLOAD_FOLDER = os.path.join(_backend_dir, "uploads")
+PHOTO_FOLDER  = os.path.join(_backend_dir, "profile_photos")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(PHOTO_FOLDER,  exist_ok=True)
 
@@ -42,7 +42,7 @@ def get_transcriber():
     global _transcriber
     if _transcriber is None:
         from transcriber import Transcriber
-        _transcriber = Transcriber(model_size="base")
+        _transcriber = Transcriber(model_size="small")
     return _transcriber
 
 def get_scorer():
@@ -52,12 +52,12 @@ def get_scorer():
         _scorer = WebScorer()
     return _scorer
 
-# ── SERVE PROFILE PHOTOS ──────────────────────────────────────────────────────
+# SERVE PROFILE PHOTOS 
 @app.route("/profile_photos/<filename>")
 def serve_photo(filename):
     return send_from_directory(PHOTO_FOLDER, filename)
 
-# ── AUTH ──────────────────────────────────────────────────────────────────────
+# AUTH
 @app.route("/")
 def index():
     if "user_id" in session:
@@ -92,7 +92,6 @@ def login():
         session["user_id"] = result["user_id"]
         session["email"]   = result["email"]
         session["role"]    = result["role"]
-        # Redirect to pending interview if candidate came from a link
         pending = session.pop("pending_token", None)
         if pending and result["role"] == "candidate":
             result["redirect"] = f"/attend/{pending}"
@@ -107,7 +106,7 @@ def logout():
     session.clear()
     return redirect(url_for("index"))
 
-# ── PROFILE PHOTO ─────────────────────────────────────────────────────────────
+# PROFILE PHOTO
 @app.route("/upload_photo", methods=["POST"])
 def upload_photo():
     if "user_id" not in session:
@@ -133,7 +132,7 @@ def upload_photo():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# ── FACE VERIFICATION ─────────────────────────────────────────────────────────
+# FACE VERIFICATION
 @app.route("/verify_face", methods=["POST"])
 def verify_face_route():
     if "user_id" not in session:
@@ -156,7 +155,7 @@ def verify_face_route():
                         "message": "Verification skipped due to error.",
                         "skip": True})
 
-# ── CANDIDATE PROFILE ─────────────────────────────────────────────────────────
+# CANDIDATE PROFILE 
 @app.route("/profile", methods=["GET", "POST"])
 def profile_page():
     if "user_id" not in session:
@@ -172,7 +171,7 @@ def profile_page():
     return render_template("profile.html", profile=profile, user=user,
                            email=session.get("email"), role=session.get("role","candidate"))
 
-# ── INTERVIEWER PROFILE ───────────────────────────────────────────────────────
+# INTERVIEWER PROFILE 
 @app.route("/interviewer_profile", methods=["GET", "POST"])
 def interviewer_profile():
     if "user_id" not in session or session.get("role") != "interviewer":
@@ -187,7 +186,7 @@ def interviewer_profile():
     return render_template("interviewer_profile.html", profile=profile,
                            user=user, email=session.get("email"))
 
-# ── INTERVIEWER DASHBOARD ─────────────────────────────────────────────────────
+# INTERVIEWER DASHBOARD
 @app.route("/interviewer")
 def interviewer_dashboard():
     if "user_id" not in session or session.get("role") != "interviewer":
@@ -223,7 +222,7 @@ def delete_interview(set_id):
     delete_interview_set(set_id, session["user_id"])
     return jsonify({"success": True})
 
-# ── AI QUESTION GENERATION ────────────────────────────────────────────────────
+# AI QUESTION GENERATION
 @app.route("/generate_questions", methods=["POST"])
 def generate_questions_route():
     if "user_id" not in session or session.get("role") != "interviewer":
@@ -241,7 +240,7 @@ def generate_questions_route():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# ── ATTEND INTERVIEW VIA LINK (FIXED) ─────────────────────────────────────────
+# ATTEND INTERVIEW VIA LINK (FIXED)
 @app.route("/attend/<token>")
 def attend_interview(token):
     # Validate token
@@ -250,17 +249,14 @@ def attend_interview(token):
         return render_template("error.html",
                                message="This interview link is invalid or has expired.")
 
-    # Not logged in — save token, redirect to login page
     if "user_id" not in session:
         session["pending_token"] = token
         return redirect(url_for("index"))
 
-    # Interviewers blocked
     if session.get("role") == "interviewer":
         return render_template("error.html",
                                message="Interviewers cannot attend interviews. Please login as a candidate.")
 
-    # Must have a profile
     profile = get_profile(session["user_id"])
     if not profile:
         session["pending_token"] = token
@@ -274,7 +270,7 @@ def attend_interview(token):
                            interview_title=iset["title"],
                            interview_set_id=iset["id"])
 
-# ── DEFAULT INTERVIEW ─────────────────────────────────────────────────────────
+# DEFAULT INTERVIEW
 @app.route("/interview")
 def interview_page():
     if "user_id" not in session:
@@ -300,7 +296,7 @@ def interview_page():
                            interview_title="CSE Interview",
                            interview_set_id=None)
 
-# ── UPLOAD AUDIO ──────────────────────────────────────────────────────────────
+# UPLOAD AUDIO
 @app.route("/upload_audio", methods=["POST"])
 def upload_audio():
     if "user_id" not in session:
@@ -362,7 +358,7 @@ def evaluate():
         print(traceback.format_exc())
         return jsonify({"error": str(e)}), 500
 
-# ── RESULTS & HISTORY ─────────────────────────────────────────────────────────
+# RESULTS & HISTORY
 @app.route("/results/<int:session_id>")
 def results_page(session_id):
     if "user_id" not in session:

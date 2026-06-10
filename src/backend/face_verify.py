@@ -1,15 +1,7 @@
-"""
-face_verify.py - Strong version using LBPH face recognizer
-Uses OpenCV's built-in LBPH (Local Binary Pattern Histogram) recognizer
-which is much more accurate than histogram comparison.
-Falls back to histogram if LBPH is not available.
-"""
-
 import cv2
 import numpy as np
 import base64
 import os
-
 
 def decode_b64(b64_string):
     try:
@@ -25,17 +17,14 @@ def decode_b64(b64_string):
 
 
 def detect_face(img):
-    """Detect largest face in image, return cropped + resized."""
     if img is None:
         return None
     cascade = cv2.CascadeClassifier(
         cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
     )
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    # Enhance contrast for better detection
     gray = cv2.equalizeHist(gray)
 
-    # Try different parameters
     for scale, neighbors, minsize in [
         (1.1, 5, 80), (1.05, 4, 60), (1.2, 4, 80), (1.1, 3, 50)
     ]:
@@ -57,11 +46,7 @@ def detect_face(img):
 
 
 def compare_lbph(face1_gray, face2_gray):
-    """
-    LBPH comparison — best OpenCV method for face recognition.
-    Train on face1, predict face2.
-    Lower predict confidence = better match (0 = perfect).
-    """
+
     try:
         recognizer = cv2.face.LBPHFaceRecognizer_create(
             radius=1, neighbors=8, grid_x=8, grid_y=8
@@ -81,7 +66,7 @@ def compare_lbph(face1_gray, face2_gray):
 
 
 def compare_histogram(img1, img2):
-    """Fallback histogram comparison."""
+   
     try:
         hsv1 = cv2.cvtColor(img1, cv2.COLOR_BGR2HSV)
         hsv2 = cv2.cvtColor(img2, cv2.COLOR_BGR2HSV)
@@ -97,13 +82,7 @@ def compare_histogram(img1, img2):
 
 
 def verify_face(profile_photo_path, live_frame_b64):
-    """
-    Main verification function.
-    Returns verified=True if face matches profile photo.
-    Uses LBPH (most accurate) with histogram as fallback.
-    Threshold: LBPH score >= 0.30 OR histogram >= 0.40
-    """
-    # No profile photo — skip
+    
     if not profile_photo_path or not os.path.exists(profile_photo_path):
         return {"verified": True, "confidence": 1.0, "face_detected": False,
                 "message": "No profile photo — skipping verification.", "skip": True}
@@ -126,29 +105,22 @@ def verify_face(profile_photo_path, live_frame_b64):
                 "message": "No face detected. Look at the camera in good lighting."}
 
     if profile_face is None:
-        # Cannot detect face in profile photo — allow through
         return {"verified": True, "confidence": 0.6, "face_detected": True,
                 "message": "Profile photo face unclear. Please retake in good lighting."}
 
-    # Convert to grayscale for LBPH
     g1 = cv2.cvtColor(profile_face, cv2.COLOR_BGR2GRAY)
     g2 = cv2.cvtColor(live_face,    cv2.COLOR_BGR2GRAY)
 
-    # Try LBPH first
     lbph_score = None
     has_lbph   = hasattr(cv2, 'face')
     if has_lbph:
         lbph_score = compare_lbph(g1, g2)
 
-    # Histogram comparison
     hist_score = compare_histogram(profile_face, live_face)
-
-    # Decide
     if lbph_score is not None:
-        # LBPH is more reliable
         final_score = lbph_score * 0.7 + hist_score * 0.3
         method      = "LBPH+Histogram"
-        threshold   = 0.28   # tuned for LBPH
+        threshold   = 0.28  
     else:
         final_score = hist_score
         method      = "Histogram"
