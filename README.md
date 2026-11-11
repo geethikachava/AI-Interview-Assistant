@@ -33,6 +33,7 @@ approximates the same multi-signal, fairness-aware philosophy with accessible co
 - **Fairness in spirit** → scoring rubrics key on *job-relevant* skills and work values,
   not on personal/demographic attributes.
 
+
 ---
 
 ## Features
